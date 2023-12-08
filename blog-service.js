@@ -1,77 +1,139 @@
-const fs = require('fs');
-const path = require('path');
+const { rejects } = require("assert");
+const file = require("fs"); 
+const { resolve } = require("path");
 
-// Paths to data files
-const postsFilePath = path.join(__dirname, 'data', 'Posts.json');
-const categoriesFilePath = path.join(__dirname, 'data', 'Categories.json');
+var posts = [];
+var categories = [];
 
-// Global arrays 
-let posts = [];
-let categories = [];
-
-// Function to read  JSON file
-function readAndParseJSONFile(filePath) {
+function getPostsByCategory(category) {
   return new Promise((resolve, reject) => {
-    fs.readFile(filePath, 'utf8', (err, data) => {
+    const filterPosts = posts.filter((post) => post.category === category);
+    
+    if (filterPosts.length === 0) {
+      reject("No results returned");
+    } else {
+      resolve(filterPosts);
+    }
+  });
+}
+
+function getPostsByMinDate(minDateStr) {
+  return new Promise((resolve, reject) => {
+    const filterPosts = posts.filter((post) => {
+      return new Date(post.postDate) >= new Date(minDateStr);
+    });
+    
+    if (filterPosts.length === 0) {
+      reject("No results returned");
+    } else {
+      resolve(filterPosts);
+    }
+  });
+}
+
+function getPostById(id) {
+  return new Promise((resolve, reject) => {
+    const foundPost = posts.find((post) => post.id === id);
+    
+    if (foundPost) {
+      const formattedPost = {
+        id: foundPost.id,
+        title: foundPost.title,
+        body: foundPost.content,
+        postDate: foundPost.postDate,
+        category: foundPost.category,
+        featureImage: foundPost.featureImage,
+        published: foundPost.published
+      };
+      resolve(formattedPost);
+    } else {
+      reject("No result returned");
+    }
+  });
+}
+
+
+function addPost(postData) {
+  return new Promise((resolve, reject) => {
+    if (typeof postData.published === 'undefined') {
+      postData.published = false;
+    } else {
+      postData.published = true;
+    }
+    
+    postData.id = posts.length + 1;
+    
+    posts.push(postData);
+    
+    resolve(postData);
+  });
+}
+
+initialize = function () {
+  return new Promise((resolve, reject) => {
+    file.readFile("./data/posts.json", "utf8", (err, data) => {
       if (err) {
-        reject(`Unable to read file: ${filePath}`);
-        return;
-      }
-      try {
-        const parsedData = JSON.parse(data);
-        resolve(parsedData);
-      } catch (error) {
-        reject(`Error parsing JSON file: ${filePath}`);
+        reject("unable to read file");
+      } else {
+        posts = JSON.parse(data);
       }
     });
+
+    file.readFile("./data/categories.json", "utf8", (err, data) => {
+      if (err) {
+        reject("unable to read file");
+      } else {
+        categories = JSON.parse(data);
+      }
+    });
+    resolve();
   });
-}
+};
 
-// Module Initialized by reading and loading data files
-function initialize() {
-  return Promise.all([
-    readAndParseJSONFile(postsFilePath).then((data) => (posts = data)),
-    readAndParseJSONFile(categoriesFilePath).then((data) => (categories = data)),
-  ]);
-}
-
-// Function to get all posts
-function getAllPosts() {
-  return new Promise((resolve, reject) => {
+getAllPosts = function () {
+  return new Promise((res, rej) => {
     if (posts.length === 0) {
-      reject('No results returned');
+      rej("no results returned");
     } else {
-      resolve(posts);
+      res(posts);
     }
   });
-}
+};
 
-// Function to get published posts
-function getPublishedPosts() {
-  return new Promise((resolve, reject) => {
-    const publishedPosts = posts.filter((post) => post.published === true);
-    if (publishedPosts.length === 0) {
-      reject('No results returned');
+getPublishedPosts = function () {
+  return new Promise((res, rej) => {
+    var filterPosts = [];
+    for (let i = 0; i < posts.length; i++) {
+      if (posts[i].published === true) {
+        filterPosts.push(posts[i]);
+      }
+    }
+
+    if (filterPosts.length === 0) {
+      rej("no results returned");
     } else {
-      resolve(publishedPosts);
+      res(filterPosts);
     }
   });
-}
+};
 
-// Function to get all categories
-function getCategories() {
-  return new Promise((resolve, reject) => {
+getCategories = function () {
+  return new Promise((res, rej) => {
     if (categories.length === 0) {
-      reject('No results returned');
+      rej("no results returned");
     } else {
-      resolve(categories);
+      res(categories);
     }
   });
-}
+};
 
 module.exports = {
   initialize,
   getAllPosts,
   getPublishedPosts,
   getCategories,
+  addPost,
+  getPostsByCategory,
+  getPostsByMinDate,
+  getPostById,
 };

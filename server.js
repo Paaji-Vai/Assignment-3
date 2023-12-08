@@ -1,63 +1,168 @@
-//CYCLIC LINK
 
+/*********************************************************************************
+*  BTI325 – Assignment 03
+*  I declare that this assignment is my own work in accordance with Seneca  Academic Policy.  No part 
+*  of this assignment has been copied manually or electronically from any other source 
+*  (including 3rd party web sites) or distributed to other students.
+* 
+*  Name: _______Japit Singh___ Student ID: _______113570220______ 
+* 
+CYCLIC Link:
+*
+********************************************************************************/ 
 
 
 const express = require('express');
-const path = require('path');
-const app = express();
-const blogService = require('./blog-service');
-const HTTP_PORT = process.env.PORT || 8080;
+const blogData = require("./blog-service");
+const path = require("path");
 
-app.use(express.static('public'));
+const multer = require("multer");
+const cloudinary = require('cloudinary').v2
+const streamifier = require('streamifier')
+
+cloudinary.config({
+    cloud_name: 'dk7ncd007',
+    api_key: '188818145823732',
+    api_secret: 'TytnUfCOgT5qWUiB2FSexQW8m6Q',
+    secure: true
+});
+
+const upload = multer(); 
+const app = express(); 
+const HTTP_PORT = process.env.PORT || 8080; 
+const blogService = require("./blog-service.js");
+app.post("/posts/add", upload.single("featureImage"), async (req, res) => {
+  let streamUpload = (req) => {
+    return new Promise((resolve, reject) => {
+      let stream = cloudinary.uploader.upload_stream(
+        (error, result) => {
+          if (result) {
+            resolve(result);
+          } else {
+            reject(error);
+          }
+        }
+      );
+
+      streamifier.createReadStream(req.file.buffer).pipe(stream);
+    });
+  };
+
+  async function uploadImage(req) {
+    try {
+      let uploaded = await streamUpload(req);
+      return uploaded;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  try {
+    const uploaded = await uploadImage(req);
+    req.body.featureImage = uploaded.url;
+
+    const newPost = {
+      title: req.body.title,
+      body: req.body.body,
+      category: parseInt(req.body.category),
+      published: req.body.published === 'on',
+      featureImage: req.body.featureImage,
+    };
+
+    blogService.addPost(newPost)
+      .then((addedPost) => {
+        console.log({ addedPost });
+        res.redirect('/posts');
+      })
+      .catch((error) => {
+        console.error(error);
+        res.status(500).send('Internal Server Error');
+      });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Error uploading image to Cloudinary');
+  }
+});
+
+
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '/views/about.html'));
+    res.redirect('/about');
   });
-  app.use('/app',(req, res) => {                       
-    res.send("404 ERROR")   ;
+  app.get("/about", (req, res) => {
+    res.sendFile(__dirname + "/views/about.html");
   });
-  
-
-
-blogService.initialize()
-  .then(() => {
-    app.get('/blog', (req, res) => {
-      blogService.getPublishedPosts()
-        .then((posts) => {
-          res.json(posts);
-        })
-        .catch((error) => {
-          res.status(500).json({ error });
-        });
+app.use(express.static('public'));
+app.get("/blog", (req, res) => {
+  blogService
+    .getPublishedPosts()
+    .then((data) => {
+      res.json(data);
+    })
+    .catch(function (err) {
+      console.log("Unable to open the file: " + err);
     });
+});
+app.get("/posts/add",(req,res)=>{
+ res.sendFile(__dirname + "/views/addPost.html");
+ upload.single("featureImage");
+});
 
-    app.get('/posts', (req, res) => {
-      // Use blogService to fetch and send posts data
-      blogService.getAllPosts()
-        .then((posts) => {
-          res.json(posts);
-        })
-        .catch((error) => {
-          res.status(500).json({ error });
-        });
-    });
-
-    app.get('/categories', (req, res) => {
-      // Use blogService to fetch and send categories data
-      blogService.getCategories()
-        .then((categories) => {
-          res.json(categories);
-        })
-        .catch((error) => {
-          res.status(500).json({ error });
-        });
-    });
+app.get("/posts", (req, res) => {
+  const { category, minDate } = req.query;
     
+  if (category) {
+    blogService
+      .getPostsByCategory(category)
+      .then((data) => {
+        res.json(data);
+      })
+      .catch(function (err) {
+        console.log("Unable to fetch posts by category: " + err);
+        res.status(500).send('Internal Server Error');
+      });
+  } else if (minDate) {
+    blogService
+      .getPostsByMinDate(minDate) 
+      .then((data) => {
+        res.json(data);
+      })
+      .catch(function (err) {
+        console.log("Unable to fetch posts by minDate: " + err);
+        res.status(500).send('Internal Server Error');
+      });
+  } else {
+    blogService
+      .getAllPosts()
+      .then((data) => {
+        res.json(data);
+      })
+      .catch(function (err) {
+        console.log("Unable to open: " + err);
+        res.status(500).send('Internal Server Error');
+      });
+  }
+});
 
-    // Start the server
-    app.listen(HTTP_PORT, () => {
-      console.log(`Server listening on: http://localhost:${HTTP_PORT}`); //This will redirect you to the About page
+app.get("/categories", (req, res) => {
+  blogService
+    .getCategories()
+    .then((data) => {
+      res.json(data);
+    })
+    .catch(function (err) {
+      console.log("Unable to open the file: " + err);
     });
+});
+
+app.get("*", (req, res) => {
+  res.status(404).sendFile(__dirname + "/views/404/error.html");
+});
+
+blogService
+.initialize()
+.then(function(){
+  app.listen(HTTP_PORT, () => console.log(`Express http server listening on: ${HTTP_PORT}`));
   })
-  .catch((error) => {
-    console.error('Initialization error:', error);
-  });
+  .catch(function(err){
+    console.log("Unable to open file: "+ err);
+  })
